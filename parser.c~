@@ -1,0 +1,787 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<fcntl.h>
+#define MAX_TOKEN_LENGTH 10
+
+int file;
+
+
+int idList(char* token);
+int expn(char* token);
+
+char* getToken()
+{
+	char* tok = (char*) malloc(sizeof(char)*MAX_TOKEN_LENGTH);
+	int pointer = 0;
+	char temp;
+	int a;
+	int start = 0;
+	int id_flag = 0;
+	while( ( a = read( file, &temp, 1 ) )!= 0 )
+	{
+		if( start == 0 && temp == '<' )
+		{
+			start = 1;
+			continue;
+		}
+		// For handling the id 
+		if( temp == 'i' )
+		{
+			tok[pointer] = temp;
+			pointer++;
+			a = read( file, &temp, 1 );
+			if( temp == 'd' )
+			{
+				tok[pointer] = temp;
+				pointer++;
+				id_flag = 1;
+			}
+		}
+		if( temp == '>' )
+		{
+			read( file, &temp, 1 );
+			if( temp == '=' )
+			{
+				tok[pointer] = '>';
+				pointer++;
+				tok[pointer] = '=';
+				pointer++;
+				continue;
+			}
+			else if( temp== '>')
+			{
+				tok[pointer] = '>';
+				pointer++;
+				read( file, &temp, 1 );
+				break;
+			}
+			else 
+			{
+				break;
+			}
+		}
+		if( temp!=' ' && temp!='\n' && temp!='\t' && temp!='-')
+		{
+			if( id_flag != 1)
+			{
+				tok[pointer] = temp;
+				pointer++;
+			}
+		}
+	}
+	tok[pointer]='\0';
+	return tok;
+}
+
+char* free_and_get_token(char* token)
+{
+	free(token);
+	return getToken();
+}
+
+
+
+int mulop(char* token)
+{
+	if( strcmp(token,"*") == 0 || strcmp(token,"/") ==0 || strcmp(token,"%") == 0 )
+	{
+		return 1;
+	}
+	else
+	{
+		printf("Error in relop, Expected mul operator but has %s\n",token);
+		return -1;
+	}
+}
+
+int addop(char* token)
+{
+	if( strcmp(token,"+") || strcmp(token,"-") )
+	{	
+		return 1;
+	}
+	else
+	{
+		printf("Error in addlop, Expected add operator but has %s\n",token);
+		return -1;
+	}
+}
+
+int relop(char* token)
+{
+	if( strcmp(token,"==")==0 ||strcmp(token,"!=")==0 || strcmp(token,"<=")==0 || \
+					strcmp(token,">=")==0 || strcmp(token,">")==0 ||  strcmp(token,"<")==0 )
+	{
+		return 1;
+	}
+	else
+	{
+		printf("Error in relop, Expected relation operator but has %s\n",token);
+		return -1;
+	}
+}
+
+int dprime(char* token)
+{
+	if( strcmp(token,"else") == 0 )
+	{
+		printf("Parsed else\n");
+		token = free_and_get_token(token);
+		if( strcmp(token,"{") == 0 )
+		{
+			token = free_and_get_token(token);
+			if( statement_list(token) == 1 )
+			{
+				if( strcmp(token,"}") == 0 )
+				{
+					token = free_and_get_token(token);
+					return 1;
+				}
+				else
+				{
+					printf("Expecting } in else but recieved %s\n",token);
+					return -1;
+				}
+			}
+			else
+			{
+				printf("Error parsing statment in dprime \n");
+				return -1;
+			}
+		}
+		else
+		{
+			printf("Expecting { in else but reciebved %s\n",token);
+				return -1;
+		}
+	}
+	else
+	{
+		printf("Expected else in seprime but used EPSILON ( token = %s ) \n",token);
+		return 1;
+	}
+}
+
+int decesion_stat( char* token)
+{
+	printf("\n\n\nEnetred dec token is %s\n",token);
+	if( strcmp(token,"if") == 0 )
+	{
+		printf("parsed if\n");
+		token = free_and_get_token(token);
+		if( strcmp(token,"(") == 0 )
+		{
+			printf("parsed (\n");
+			token = free_and_get_token(token);
+			if( expn(token) == 1 )
+			{
+				if( strcmp(token,")") == 0 )
+				{
+					printf("parsed )\n");
+					token = free_and_get_token(token);
+					if( strcmp(token,"{") == 0 )
+					{
+						token = free_and_get_token(token);
+						if( statement_list(token) == 1 )
+						{
+							if( strcmp(token,"}") == 0 )
+							{
+								token = free_and_get_token(token);
+								if( dprime(token) == 1 )
+								{
+									return 1;
+								}
+								else
+								{
+									printf("Error in parsing dprime in decesion_stat\n");
+									return -1;
+								}
+							}
+							else
+							{
+								printf("Expected }, but recieved %s\n",token);
+								return -1;
+							}
+						}
+						else
+						{
+							printf("Error in parsing statement in decesion_stat\n");
+								return -1;
+						}
+					}
+					else
+					{
+						printf("Expected { , but recieved %s\n",token);
+						return -1;
+					}
+				}
+				else
+				{
+					printf("Expected ) , but got %s\n",token);
+					return -1;
+				}
+			}
+			else
+			{
+				printf("Error in parsing expn in decesion_stat\n");
+							return -1;
+			}
+		}
+		else
+		{
+			printf("Expected (, but got %s\n",token);
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Expected if , but got %s\n",token);
+		return -1;
+	}
+}
+
+
+int factor(char* token)
+{	
+	printf("ENtered factor and token is %s\n",token);
+	if(( strcmp(token,"id") == 0 ) || (strcmp(token,"num")==0 ))
+	{	
+		return 1;
+	}
+	else
+	{
+		printf("Error in factor, Expected id or num but has %s\n",token);
+		return -1;
+	}
+	printf("ENtered factor and token is %s\n",token);
+}
+
+
+int tprime(char* token)
+{
+	if( strcmp(token,"*")==0 || strcmp(token,"/")==0 || strcmp(token,"%")==0 )
+	{
+		if( mulop(token) == 1)
+		{
+			token = free_and_get_token(token);
+			if( factor(token) == 1)
+			{	
+				token = free_and_get_token(token);
+				if( tprime(token) == 1 )
+					return 1;
+				else
+				{
+					printf("Error in parsing tprime in tprime \n");
+					return -1;
+				}
+			}
+			else
+			{
+				printf("Error in parsing factor in tprime \n");
+				return -1;
+			}
+			
+		}
+		else
+		{
+			printf("Error in parsing mulop in tprime \n");
+			return -1;
+		}
+		
+	}
+	else
+	{	
+		printf("Expected *|/|%% in tprime but used EPSILON ( token = %s ) \n",token);
+		return 1;
+	}
+}
+
+int term(char* token)
+{
+	printf("ENtered factor and token is %s\n",token);
+	if( factor(token) == 1)
+	{
+		token = free_and_get_token(token);
+		if( tprime(token) == 1)
+			return 1;
+		else
+		{
+			printf("Error in parsing tprime in term \n");
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Error in parsing factor in term \n");
+		return -1;
+	}
+}
+
+int seprime(char* token)
+{
+	if( strcmp(token,"+")==0 || strcmp(token,"-")==0 )
+	{
+		if( addop(token) == 1 )
+		{
+			// Get new token
+			token = free_and_get_token(token);
+			// Got token
+			if( term(token) == 1 )
+			{
+				if( seprime(token) == 1)
+				{
+					return 1;
+				}
+				else
+				{
+					printf("Error in parsing seprime in seprime \n");
+					return -1;
+				}
+			}
+			else
+			{
+				printf("Error in parsing term in serpirme \n");
+				return -1;
+			}
+		}
+		else
+		{
+			printf("Error in parsing addop in seprime \n");
+			return -1;
+		}	
+	}
+	else
+	{
+		printf("Expected +|- in seprime but used EPSILON ( token = %s ) \n",token);
+		return 1;
+	}
+}
+
+
+int simple_expn(char* token)
+{
+	if( term(token) == 1 )
+	{
+		if( seprime(token) == 1 )
+		{
+			return 1;
+		}
+		else
+		{
+			printf("Error in parsing seprime in simpe_expn \n");
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Error in parsing term in simple_expn \n");
+		return -1;
+	}
+	
+}
+
+int eprime(char* token)
+{
+	if( strcmp(token,"==") ==0  ||strcmp(token,"!=")==0  || strcmp(token,"<=")==0 || \
+			strcmp(token,">=")==0 || strcmp(token,">")==0 || strcmp(token,"<")==0 )
+	{
+		if( relop(token) == 1 )
+		{
+			token = free_and_get_token(token);
+			if( simple_expn(token) == 1)
+			{
+				return 1;
+			}
+			else
+			{
+				printf("Error in parsing simple_expn in eprime \n");
+				return -1;
+			}
+		}
+		else
+		{
+			printf("Error in parsing relop in eprime \n");
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Expected ==|!=|<=|>=|>|< in eprime but used EPSILON ( token = %s ) \n",token);
+		return 1;
+	}
+}
+
+int expn(char* token)
+{
+	if( simple_expn(token) == 1 )
+	{
+		if( eprime(token) ==  1 )
+		{
+			return 1;
+		}
+		else
+		{
+			printf("Error parsing eprime in assign_stat\n");
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Error parsing simple_expn in assign_stat\n");
+		return -1;
+	}
+}
+
+int assign_stat(char* token)
+{
+	if( strcmp(token,"id")==0 )
+	{
+		printf("Parsed id\n");
+		token = free_and_get_token(token);
+		if( strcmp(token,"=") == 0 )
+		{
+			printf("Parsed =\n");
+			token = free_and_get_token(token);
+			if( expn(token) == 1 )
+			{
+				return 1;
+			}
+			else
+			{
+				printf("Error parsing expn in assign_stat\n");
+				return -1;
+			}
+		}
+		else
+		{
+			printf("Expected = in assign_stat but used %s\n",token);
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Expected id in assign_stat but used %s\n",token);
+		return -1;
+	}
+}
+
+int statement(char* token)
+{
+	if( strcmp(token,"id") == 0 )
+	{
+		if (assign_stat(token) == 1 )
+		{
+			return 1;
+		}
+		else
+		{
+			printf("Error parsing assign_stat in statament\n");
+			return -1;
+		}
+	}
+	else if( strcmp(token,"if")==0 )
+	{
+		if (decesion_stat(token) == 1 )
+		{
+			return 1;
+		}
+		else
+		{
+			printf("Error parsing dec_stat in statament\n");
+			return -1;
+		}	
+	}
+	else
+	{
+		printf("Expected id or if in statement but used %s\n",token);
+		return -1;
+	}
+	
+}
+
+int statement_list(char* token)
+{
+	printf("Entered statement list and token is %s\n",token);
+	if((strcmp(token,"id") == 0 ) || ( strcmp(token,"if") == 0 ))
+	{	
+		if( statement(token) == 1 )
+		{
+			if( strcmp(token,";") == 0 )
+			{
+				token = free_and_get_token(token);
+				if( statement_list(token) == 1)
+				{
+					return 1;
+				}
+				else
+				{
+					printf("Error parsing statement_list function in statement_list \n");
+					return -1;
+				}
+			}
+			else
+			{
+				printf("Expected ; in statement_list but used %s\n",token);
+				return -1;
+			}
+		}
+		else
+		{
+			printf("Error parsing statement function in statement_list \n");
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Expected id|if in declarations but used EPSILON in statement_list ( token = %s ) \n",token);
+		return 1;
+	}
+}
+
+// First part of the program ------------------------------------------------------------------------------------------------- //
+
+int Y(char* token)
+{
+	if( strcmp(token,",") == 0 )
+	{
+		printf("Parsed , \n");
+		token = free_and_get_token(token);
+		if( idList(token) == 1 )
+		{
+			return 1;
+		}
+		else
+		{
+			printf("Error in parsing idList function in idList\n",token);
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Expected , in declarations but used EPSILON in Y ( token = %s ) \n",token);
+		return 1;
+	}
+}
+
+int idList(char* token)
+{
+	if( strcmp(token,"id") == 0 )
+	{
+		printf("Parsed id \n");
+		token = free_and_get_token(token);
+		if( Y(token) == 1 )
+		{
+			return 1;
+		}
+		else
+		{
+			printf("Error in parsing Y function in idList\n",token);
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Expected id in idList but used %s\n",token);
+		return -1;
+	}
+}
+int declarations(char* token)
+{
+	// Check if the current token is first of the declarations
+	if( ( strcmp(token,"int") == 0 ) || strcmp(token,"char") == 0 )
+	{
+			printf("Parsed %s \n",token);
+			token = free_and_get_token(token);
+			// Got new token
+			if( idList(token) == 1 )
+			{
+				if( strcmp(token,";") == 0 )
+				{
+					token = free_and_get_token(token);
+					if( declarations(token) == 1  )
+					{
+						return 1;
+					}
+					else
+					{
+						return -1;
+					}
+				}
+				else
+				{
+					printf("Expected ; in declarations but used %s\n",token);
+					return -1;
+				}
+			}
+			else
+			{
+				printf("Error in parsing ID_LIST in DECLARATIONS function\n");
+				return -1;
+			}	
+	}
+	else
+	{
+		printf("Expected int or char but found %s, Used EPSILON\n",token);
+		return 1;
+	}
+}
+
+// Start variable --------------------------------------- //
+
+int program(char* token)
+{
+	int flag = 0;
+	printf("Token is %s\n",token);
+	// Token is always terminated with \0 
+	if( strcmp(token,"int") == 0)
+	{
+		free(token);
+		token = getToken();
+		if( strcmp(token,"id") == 0 )
+		{
+			printf("Parsed main \n");
+			free(token);
+			token = getToken();
+			// Got new token
+			if( strcmp(token,"(") == 0 )
+			{
+				printf("Parsed ( \n");
+				free(token);
+				token = getToken();
+				// Got new token
+				if ( strcmp(token,")") == 0) 
+				{
+					printf("Parsed ) \n");
+					free(token);
+					token = getToken();
+					// Got new token
+					if( strcmp(token,"{") == 0 )
+					{
+						printf("Parsed { \n");
+						free(token);
+						token = getToken();
+						// Got new Token
+						// Now check if it used epsilon in the function call
+					
+						int a = declarations(token);
+						if( a == 1 )
+						{
+							if( statement_list(token) == 1 )
+							{
+								printf("Succesfully parsed statement_list\n");
+							}
+							else
+							{
+								printf("Error in parsing STATEMENT_LIST in PROGRAM function\n");
+								return -1;
+							}
+							if( strcmp(token,"}") == 0 )
+							{
+								free(token);
+								token = getToken();
+								printf("final ---------- %s,%d\n",token,token);
+								if( token == NULL)
+									return 1;
+								else
+									return -1;
+							}
+							else
+							{
+								printf("Expected }, But error parsing it\n");
+								return -1;
+							}
+						}
+						else
+						{
+							printf("Error in parsing declarations in program function\n");
+							return -1;
+						}
+					}
+					else 
+					{
+						printf("Expected {, But error parsing it\n");
+						return -1;
+					}
+				}
+				else
+				{
+					printf("Expected ), But error parsing it\n");
+					return -1;
+				}
+			}
+			else
+			{
+				printf("Expected (, But error parsing it\n");
+				return -1;
+			}
+		}
+		else
+		{
+			printf("Expected main, But error parsing it\n");
+			return -1;
+		}
+	}
+	else
+	{
+		printf("Expected int, But error parsing it\n");
+		return -1;
+	}
+}
+	
+
+
+int main()
+{
+	file = open("token_file",O_RDONLY,0777);
+	char* token = getToken();
+	if( program(token) != -1 )
+	{
+		printf("SUCCESFULLY PARSED!\n\n");
+	}
+	else
+	{
+		printf("\n\nFAILED TO PARSE!\n");
+	}/*
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());
+	printf("%s\n",getToken());*/
+}
